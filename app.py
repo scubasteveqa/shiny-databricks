@@ -43,11 +43,8 @@ def query_trips(
     sql = f"""
         SELECT
             tpep_pickup_datetime   AS pickup_time,
-            tpep_dropoff_datetime  AS dropoff_time,
             trip_distance,
             fare_amount,
-            tip_amount,
-            total_amount,
             pickup_zip,
             dropoff_zip
         FROM samples.nyctaxi.trips
@@ -300,7 +297,7 @@ app_ui = ui.page_sidebar(
             style="flex:1;min-width:0;",
         ),
         ui.div(
-            ui.HTML('<h4>Tip % Distribution</h4>'),
+            ui.HTML('<h4>Distance Distribution</h4>'),
             ui.output_ui("plot_tip"),
             class_="chart-box",
             style="flex:1;min-width:0;",
@@ -367,7 +364,6 @@ def server(input: Inputs, output: Outputs, session: Session):
         n = len(df)
         avg_fare = df["fare_amount"].mean()
         avg_dist = df["trip_distance"].mean()
-        avg_tip = df["tip_amount"].mean()
         return ui.HTML(f"""
         <div style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.4rem;">
             <div class="stat-card">
@@ -381,10 +377,6 @@ def server(input: Inputs, output: Outputs, session: Session):
             <div class="stat-card">
                 <div class="stat-label">Avg Distance</div>
                 <div class="stat-value green">{avg_dist:,.2f} mi</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Avg Tip</div>
-                <div class="stat-value red">${avg_tip:,.2f}</div>
             </div>
         </div>
         """)
@@ -415,8 +407,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         sample = df.sample(min(1000, len(df)), random_state=42)
         fig = px.scatter(
             sample, x="trip_distance", y="fare_amount",
-            color="tip_amount",
-            color_continuous_scale=["#181b24", "#42c9f5", "#f5c542"],
+            color_discrete_sequence=["#42c9f5"],
             opacity=0.6,
         )
         fig.update_layout(**PLOTLY_LAYOUT)
@@ -445,14 +436,12 @@ def server(input: Inputs, output: Outputs, session: Session):
         df = df_store()
         if df is None or df.empty:
             return ui.HTML("")
-        tip_pct = (df["tip_amount"] / df["fare_amount"].replace(0, float("nan"))) * 100
         fig = px.histogram(
-            tip_pct.dropna(), nbins=50,
+            df, x="trip_distance", nbins=50,
             color_discrete_sequence=["#f5425a"],
-            labels={"value": "Tip %"},
         )
         fig.update_layout(**PLOTLY_LAYOUT)
-        fig.update_xaxes(title_text="Tip %", range=[0, 60])
+        fig.update_xaxes(title_text="Distance (mi)")
         fig.update_yaxes(title_text="Count")
         return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
