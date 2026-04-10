@@ -2,4 +2,5 @@ shiny
 databricks-sql-connector
 pandas
 plotly
-posit-sdk
+#posit-sdk
+posit-sdk @ git+https://github.com/posit-dev/posit-sdk-py.git@connect-cloud-auth
