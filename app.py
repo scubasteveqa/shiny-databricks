@@ -2,40 +2,39 @@
 Shiny for Python – Databricks NYC Taxi Explorer
 =================================================
 Connects to Databricks via databricks-sql-connector and queries
-the samples.nyctaxi.trips table.
+the samples.nyctaxi.trips table using OAuth credentials from
+a Posit Connect integration.
 
 Prerequisites:
-    pip install shiny databricks-sql-connector pandas plotly
+    pip install shiny databricks-sql-connector pandas plotly posit-sdk
 
 Environment variables (set before running):
-    DATABRICKS_HOST          – e.g. adb-123456789.12.azuredatabricks.net
-    DATABRICKS_HTTP_PATH     – e.g. /sql/1.0/warehouses/abc123
-    DATABRICKS_ACCESS_TOKEN  – your personal access token
+    DATABRICKS_HOST      – e.g. rstudio-partner-posit-default.cloud.databricks.com
+    DATABRICKS_HTTP_PATH – e.g. /sql/1.0/warehouses/abc123
 """
 
 from __future__ import annotations
 
 import os
-from datetime import date
-
 import pandas as pd
 import plotly.express as px
-from shiny import App, reactive, render, ui
+from posit import connect
+from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
-# ── Databricks connection helper ─────────────────────────────────────────────
 
-def get_databricks_connection():
-    """Return a fresh DBSQL connection using env vars."""
+def get_databricks_connection(access_token: str):
+    """Return a fresh DBSQL connection using OAuth credentials."""
     from databricks import sql as dbsql
 
     return dbsql.connect(
         server_hostname=os.environ["DATABRICKS_HOST"],
         http_path=os.environ["DATABRICKS_HTTP_PATH"],
-        access_token=os.environ["DATABRICKS_ACCESS_TOKEN"],
+        access_token=access_token,
     )
 
 
 def query_trips(
+    access_token: str,
     start_date: str,
     end_date: str,
     limit: int = 5_000,
@@ -56,7 +55,7 @@ def query_trips(
           AND tpep_pickup_datetime <  '{end_date}'
         LIMIT {limit}
     """
-    conn = get_databricks_connection()
+    conn = get_databricks_connection(access_token)
     try:
         with conn.cursor() as cur:
             cur.execute(sql)
@@ -331,17 +330,27 @@ PLOTLY_LAYOUT = dict(
 )
 
 
-def server(input, output, session):
+def server(input: Inputs, output: Outputs, session: Session):
 
     df_store: reactive.Value[pd.DataFrame | None] = reactive.Value(None)
 
     @reactive.Effect
     @reactive.event(input.go)
     def fetch():
+        session_token = session.http_conn.headers.get(
+            "Posit-Connect-User-Session-Token"
+        )
+        if not session_token:
+            return
+
+        client = connect.Client()
+        credentials = client.oauth.get_credentials(session_token)
+        access_token = credentials["access_token"]
+
         start = str(input.start_date())
         end = str(input.end_date())
         limit = int(input.limit())
-        df = query_trips(start, end, limit)
+        df = query_trips(access_token, start, end, limit)
         df_store.set(df)
 
     # ── Stat cards ──
