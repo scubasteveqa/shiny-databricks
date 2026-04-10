@@ -2,3 +2,4 @@ shiny
 databricks-sql-connector
 pandas
 plotly
+posit-sdk
